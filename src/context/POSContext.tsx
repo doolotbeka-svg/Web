@@ -202,12 +202,12 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const store = (currentSettings && allStores.find((s) => s.id === currentSettings.storeId)) || allStores[0] || null;
     setCurrentStore(store);
 
-    // Set active user
-    const user = allUsers.find((u) => u.role === 'CASHIER' && u.storeId === store?.id) || allUsers[0] || null;
-    setCurrentUser(user);
+    // Set active user (keep the currently selected user across refreshes)
+    const defaultUser = allUsers.find((u) => u.role === 'CASHIER' && u.storeId === store?.id) || allUsers[0] || null;
+    setCurrentUser((prev) => (prev && allUsers.find((u) => u.id === prev.id)) || defaultUser);
 
     // Check open shift
-    if (store && user) {
+    if (store) {
       const openShift = await db.shifts
         .filter((s) => s.storeId === store.id && s.status === 'OPEN')
         .last();
@@ -286,6 +286,12 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const toggleTheme = () => {
     updateSettings({ theme: settings.theme === 'light' ? 'dark' : 'light' });
+  };
+
+  // Inventory row for a product (or a specific variant) in a store
+  const findInventory = async (storeId: string, productId: string, variantId?: string) => {
+    const rows = await db.inventory.where({ storeId, productId }).toArray();
+    return (variantId && rows.find((r) => r.variantId === variantId)) || rows[0];
   };
 
   // Cart Calculations
@@ -685,16 +691,15 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await db.orderItems.bulkAdd(orderItems);
 
     // Deduct stock in inventory & create stock movement
-    for (const item of cart) {
-      const invQuery = db.inventory.where({ storeId: currentStore.id, productId: item.productId });
-      const currentInv = await invQuery.first();
+    for (const [idx, item] of cart.entries()) {
+      const currentInv = await findInventory(currentStore.id, item.productId, item.variantId);
       if (currentInv) {
         const newQty = Math.max(0, currentInv.quantity - item.quantity);
         await db.inventory.update(currentInv.id, { quantity: newQty });
       }
 
       await db.stockMovements.add({
-        id: `mov-sale-${Date.now()}-${item.productId}`,
+        id: `mov-sale-${orderId}-${idx}`,
         storeId: currentStore.id,
         productId: item.productId,
         productName: item.productName,
@@ -726,8 +731,11 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Update shift totals
     if (currentShift) {
       const isCash = paymentMethod === 'CASH' || (mixedPayments && mixedPayments.some((p) => p.method === 'CASH'));
+      // Change is given back from the drawer, so count only the net cash
       const cashAmount = isCash
-        ? (paymentMethod === 'CASH' ? totalAmount : (mixedPayments?.find((p) => p.method === 'CASH')?.amount || 0))
+        ? (paymentMethod === 'CASH'
+            ? totalAmount
+            : Math.max(0, (mixedPayments?.find((p) => p.method === 'CASH')?.amount || 0) - changeAmount))
         : 0;
       const cardAmount = paymentMethod === 'CARD'
         ? totalAmount
@@ -769,15 +777,14 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     // Return items back to stock
-    for (const item of order.items) {
-      const invQuery = db.inventory.where({ storeId: order.storeId, productId: item.productId });
-      const currentInv = await invQuery.first();
+    for (const [idx, item] of order.items.entries()) {
+      const currentInv = await findInventory(order.storeId, item.productId, item.variantId);
       if (currentInv) {
         await db.inventory.update(currentInv.id, { quantity: currentInv.quantity + item.quantity });
       }
 
       await db.stockMovements.add({
-        id: `mov-refund-${Date.now()}-${item.productId}`,
+        id: `mov-refund-${order.id}-${idx}`,
         storeId: order.storeId,
         productId: item.productId,
         productName: item.productName,
@@ -790,6 +797,17 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createdAt: Date.now(),
         userName: currentUser?.name,
       });
+    }
+
+    // Reverse customer bonuses and total spent
+    if (order.customerId) {
+      const cust = await db.customers.get(order.customerId);
+      if (cust) {
+        await db.customers.update(cust.id, {
+          bonusPoints: Math.max(0, cust.bonusPoints + (order.bonusApplied || 0) - (order.bonusEarned || 0)),
+          totalSpent: Math.max(0, cust.totalSpent - order.totalAmount),
+        });
+      }
     }
 
     // Update shift return stats
@@ -899,9 +917,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await db.stockMovements.add(newMovement);
 
     // Apply quantity adjustments to inventory table
-    const targetStoreId = mov.type === 'TRANSFER_OUT' ? mov.targetStoreId : mov.storeId;
-    const invQuery = db.inventory.where({ storeId: mov.storeId, productId: mov.productId });
-    const currentInv = await invQuery.first();
+    const currentInv = await findInventory(mov.storeId, mov.productId, mov.variantId);
 
     if (currentInv) {
       let delta = mov.quantity;
@@ -914,8 +930,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // If transfer between stores, also adjust receiving store
     if (mov.type === 'TRANSFER_OUT' && mov.targetStoreId) {
-      const receivingQuery = db.inventory.where({ storeId: mov.targetStoreId, productId: mov.productId });
-      const recInv = await receivingQuery.first();
+      const recInv = await findInventory(mov.targetStoreId, mov.productId, mov.variantId);
       if (recInv) {
         await db.inventory.update(recInv.id, { quantity: recInv.quantity + Math.abs(mov.quantity) });
       } else {
