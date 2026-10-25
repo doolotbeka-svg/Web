@@ -6,6 +6,7 @@
 import React, { useEffect } from 'react';
 import { POSProvider, usePOS } from './context/POSContext';
 import { Navbar } from './components/Navbar';
+import { LoginScreen } from './components/PinLogin';
 import { POSView } from './features/pos/POSView';
 import { ProductsView } from './features/products/ProductsView';
 import { SalesView } from './features/sales/SalesView';
@@ -22,6 +23,8 @@ const MainLayout: React.FC = () => {
   useEffect(() => {
     if (currentUser && !isAdmin && isAdminTab) setActiveTab('pos');
   }, [currentUser, isAdmin, isAdminTab, setActiveTab]);
+
+  if (!currentUser) return <LoginScreen />;
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
