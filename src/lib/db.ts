@@ -66,6 +66,14 @@ export class OmniPOSDatabase extends Dexie {
         s.ordersCount = Math.max(0, s.ordersCount - 3);
       });
     });
+
+    // v3: remove all product categories except the built-in "all products" filter
+    this.version(3).stores({}).upgrade(async (tx) => {
+      await tx.table('categories').where('id').notEqual('cat-all').delete();
+      await tx.table('products').toCollection().modify((p: Product) => {
+        p.categoryId = 'cat-all';
+      });
+    });
   }
 }
 
@@ -177,13 +185,6 @@ export const INITIAL_CUSTOMERS: Customer[] = [
 
 export const INITIAL_CATEGORIES: Category[] = [
   { id: 'cat-all', name: 'Все товары', slug: 'all', order: 0, color: '#475569', icon: 'LayoutGrid' },
-  { id: 'cat-bakery', name: 'Хлеб & Выпечка', slug: 'bakery', order: 1, color: '#f59e0b', icon: 'Wheat' },
-  { id: 'cat-dairy', name: 'Молочные продукты', slug: 'dairy', order: 2, color: '#38bdf8', icon: 'Milk' },
-  { id: 'cat-beverages', name: 'Напитки & Кофе', slug: 'beverages', order: 3, color: '#06b6d4', icon: 'Coffee' },
-  { id: 'cat-grocery', name: 'Бакалея & Сладости', slug: 'grocery', order: 4, color: '#ec4899', icon: 'Candy' },
-  { id: 'cat-fruits', name: 'Овощи & Фрукты', slug: 'fruits', order: 5, color: '#10b981', icon: 'Apple' },
-  { id: 'cat-apparel', name: 'Одежда & Обувь', slug: 'apparel', order: 6, color: '#8b5cf6', icon: 'Shirt' },
-  { id: 'cat-tech', name: 'Гаджеты & Электроника', slug: 'tech', order: 7, color: '#6366f1', icon: 'Smartphone' },
 ];
 
 export async function initDatabase(forceReset = false) {

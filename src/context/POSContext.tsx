@@ -844,7 +844,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const prodId = productData.id || `prod-${Date.now()}`;
     const product: Product = {
       id: prodId,
-      categoryId: productData.categoryId || categories.find((c) => c.slug !== 'all')?.id || 'cat-all',
+      categoryId: productData.categoryId || 'cat-all', // 'cat-all' = no category
       name: productData.name || 'Новый товар',
       sku: productData.sku || `SKU-${Date.now().toString().slice(-6)}`,
       barcode: productData.barcode || `${Math.floor(460000000000 + Math.random() * 90000000000)}`,
