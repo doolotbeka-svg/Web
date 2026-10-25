@@ -12,7 +12,6 @@ import {
   AlertCircle,
   Layers,
   Sparkles,
-  Barcode,
   Package,
 } from 'lucide-react';
 import { usePOS } from '../../context/POSContext';
@@ -34,7 +33,6 @@ export const POSView: React.FC = () => {
     cart,
     cartTotals,
     addToCart,
-    addToCartByBarcode,
     updateCartItemQty,
     setCartItemQty,
     removeCartItem,
@@ -151,34 +149,6 @@ export const POSView: React.FC = () => {
             )}
           </div>
 
-          {/* Barcode scanner test simulator pills */}
-          <div className="hidden xl:flex items-center gap-1.5 text-xs text-slate-400">
-            <span className="text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1">
-              <Barcode className="w-3.5 h-3.5 text-blue-500" />
-              Тест сканера:
-            </span>
-            <button
-              onClick={() => addToCartByBarcode('460700100101')}
-              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md text-[11px] font-medium text-slate-700 dark:text-slate-300"
-              title="Штрихкод Багета 460700100101"
-            >
-              Багет
-            </button>
-            <button
-              onClick={() => addToCartByBarcode('460700100115')}
-              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md text-[11px] font-medium text-slate-700 dark:text-slate-300"
-              title="Штрихкод Наушников 460700100115"
-            >
-              Наушники
-            </button>
-            <button
-              onClick={() => addToCartByBarcode('460700100202')}
-              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md text-[11px] font-medium text-slate-700 dark:text-slate-300"
-              title="Футболка Черная M"
-            >
-              Футболка M
-            </button>
-          </div>
         </div>
 
         {/* Categories Bar */}

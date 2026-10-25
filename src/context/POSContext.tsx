@@ -88,7 +88,11 @@ interface POSContextType {
   refundOrder: (orderId: string, reason: string) => Promise<void>;
 
   // Catalog & Inventory
-  saveProduct: (product: Partial<Product>, variantsList?: Partial<ProductVariant>[]) => Promise<void>;
+  saveProduct: (
+    product: Partial<Product>,
+    variantsList?: (Partial<ProductVariant> & { stock?: Record<string, number> })[],
+    stock?: Record<string, number>
+  ) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
   saveCustomer: (customer: Partial<Customer>) => Promise<Customer>;
   saveStockMovement: (movement: Omit<StockMovement, 'id' | 'createdAt'>) => Promise<void>;
@@ -829,12 +833,15 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Catalog methods
-  const saveProduct = async (productData: Partial<Product>, variantsList?: Partial<ProductVariant>[]) => {
-    const isEdit = !!productData.id;
+  const saveProduct = async (
+    productData: Partial<Product>,
+    variantsList?: (Partial<ProductVariant> & { stock?: Record<string, number> })[],
+    stock?: Record<string, number>
+  ) => {
     const prodId = productData.id || `prod-${Date.now()}`;
     const product: Product = {
       id: prodId,
-      categoryId: productData.categoryId || 'cat-bakery',
+      categoryId: productData.categoryId || categories.find((c) => c.slug !== 'all')?.id || 'cat-all',
       name: productData.name || 'Новый товар',
       sku: productData.sku || `SKU-${Date.now().toString().slice(-6)}`,
       barcode: productData.barcode || `${Math.floor(460000000000 + Math.random() * 90000000000)}`,
@@ -842,7 +849,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unit: productData.unit || 'шт',
       costPrice: Number(productData.costPrice) || 0,
       salePrice: Number(productData.salePrice) || 0,
-      minStockAlert: Number(productData.minStockAlert) || 5,
+      minStockAlert: Number(productData.minStockAlert) || 0,
       hasVariants: !!variantsList && variantsList.length > 0,
       taxRate: Number(productData.taxRate) || 20,
       image: productData.image || 'https://images.unsplash.com/photo-1549931319-a545dcf3bc73?auto=format&fit=crop&w=400&q=80',
@@ -851,33 +858,64 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     await db.products.put(product);
 
-    // Save variants if any
-    if (variantsList && variantsList.length > 0) {
-      await db.variants.where({ productId: prodId }).delete();
-      const newVariants: ProductVariant[] = variantsList.map((v, idx) => ({
-        id: v.id || `var-${prodId}-${idx}`,
-        productId: prodId,
-        name: v.name || `Вариант ${idx + 1}`,
-        sku: v.sku || `${product.sku}-V${idx + 1}`,
-        barcode: v.barcode || `${product.barcode}${idx + 1}`,
-        salePrice: Number(v.salePrice) || product.salePrice,
-        costPrice: Number(v.costPrice) || product.costPrice,
-        attributes: v.attributes || {},
-      }));
-      await db.variants.bulkPut(newVariants);
-    }
+    // Replace variants (removed ones are deleted together with their stock)
+    const newVariants: ProductVariant[] = (variantsList || []).map((v, idx) => ({
+      id: v.id || `var-${prodId}-${Date.now()}-${idx}`,
+      productId: prodId,
+      name: v.name || `Вариант ${idx + 1}`,
+      sku: v.sku || `${product.sku}-V${idx + 1}`,
+      barcode: v.barcode || `${product.barcode}${idx + 1}`,
+      salePrice: Number(v.salePrice) || product.salePrice,
+      costPrice: Number(v.costPrice) || product.costPrice,
+      attributes: v.attributes || {},
+    }));
+    await db.variants.where({ productId: prodId }).delete();
+    if (newVariants.length > 0) await db.variants.bulkPut(newVariants);
 
-    // Ensure inventory entry exists
-    if (currentStore && !isEdit) {
+    // Stock per store: one row per variant, or one row for a product without variants
+    const existingRows = await db.inventory.where({ productId: prodId }).toArray();
+    const targets = product.hasVariants
+      ? newVariants.flatMap((v, idx) =>
+          stores.map((st) => ({ storeId: st.id, variant: v, quantity: variantsList?.[idx]?.stock?.[st.id] }))
+        )
+      : stores.map((st) => ({ storeId: st.id, variant: undefined as ProductVariant | undefined, quantity: stock?.[st.id] }));
+
+    const keptIds = new Set<string>();
+    for (const t of targets) {
+      const row = existingRows.find((r) => r.storeId === t.storeId && r.variantId === t.variant?.id);
+      const oldQty = row?.quantity ?? 0;
+      const newQty = t.quantity === undefined || isNaN(t.quantity) ? oldQty : Math.max(0, t.quantity);
+      const rowId = row?.id || `inv-${t.storeId}-${t.variant?.id || prodId}`;
+      keptIds.add(rowId);
       await db.inventory.put({
-        id: `inv-${currentStore.id}-${prodId}`,
-        storeId: currentStore.id,
+        id: rowId,
+        storeId: t.storeId,
         productId: prodId,
-        quantity: 20,
-        reservedQty: 0,
-        location: 'Основной зал',
+        variantId: t.variant?.id,
+        quantity: newQty,
+        reservedQty: row?.reservedQty ?? 0,
+        location: row?.location || 'Основной зал',
       });
+      if (newQty !== oldQty) {
+        await db.stockMovements.add({
+          id: `mov-adj-${rowId}-${Date.now()}`,
+          storeId: t.storeId,
+          productId: prodId,
+          productName: product.name,
+          variantId: t.variant?.id,
+          variantName: t.variant?.name,
+          type: 'INVENTORY_ADJ',
+          quantity: newQty - oldQty,
+          unitCost: t.variant?.costPrice ?? product.costPrice,
+          reference: 'КАРТОЧКА ТОВАРА',
+          notes: 'Изменение остатка администратором',
+          createdAt: Date.now(),
+          userName: currentUser?.name,
+        });
+      }
     }
+    const staleIds = existingRows.filter((r) => !keptIds.has(r.id)).map((r) => r.id);
+    if (staleIds.length > 0) await db.inventory.bulkDelete(staleIds);
 
     await refreshData();
     sound.playScanBeep();

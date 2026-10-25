@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'MANAGER' | 'CASHIER';
+export type UserRole = 'ADMIN' | 'CASHIER';
 
 export type PaymentMethod = 'CASH' | 'CARD' | 'BONUSES' | 'MIXED' | 'QR' | 'TRANSFER';
 
