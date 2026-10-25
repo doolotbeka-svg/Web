@@ -108,7 +108,7 @@ interface POSContextType {
   addCashier: (name: string, pin: string, storeId?: string) => Promise<string | null>;
   deleteCashier: (userId: string) => Promise<string | null>;
   updateCashierStore: (userId: string, storeId?: string) => Promise<void>;
-  renameCashier: (userId: string, name: string) => Promise<string | null>;
+  renameUser: (userId: string, name: string) => Promise<string | null>;
   isStoreLocked: boolean;
 
   // Modals
@@ -1171,9 +1171,9 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Returns an error message when the name is not valid
-  const renameCashier = async (userId: string, name: string) => {
+  const renameUser = async (userId: string, name: string) => {
     const user = users.find((u) => u.id === userId);
-    if (!user || user.role !== 'CASHIER') return 'Менять можно только имена кассиров';
+    if (!user) return 'Пользователь не найден';
     const newName = name.trim();
     if (!newName) return 'Имя не может быть пустым';
     if (newName === user.name) return null;
@@ -1185,7 +1185,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       action: 'USER_RENAME',
       entity: 'User',
       entityId: userId,
-      details: `Кассир ${user.name} переименован в ${newName}`,
+      details: `${user.role === 'ADMIN' ? 'Администратор' : 'Кассир'} ${user.name} переименован в ${newName}`,
       timestamp: Date.now(),
     });
     await refreshData();
@@ -1303,7 +1303,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addCashier,
         deleteCashier,
         updateCashierStore,
-        renameCashier,
+        renameUser,
         isStoreLocked: !!lockedStoreId(currentUser),
         setLastCompletedOrder,
         setIsReceiptModalOpen,

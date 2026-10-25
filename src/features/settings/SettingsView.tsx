@@ -41,7 +41,7 @@ export const SettingsView: React.FC = () => {
     addCashier,
     deleteCashier,
     updateCashierStore,
-    renameCashier,
+    renameUser,
   } = usePOS();
 
   const [activeTab, setActiveTab] = useState<'general' | 'stores' | 'users' | 'hardware' | 'backup'>('general');
@@ -546,37 +546,33 @@ export const SettingsView: React.FC = () => {
               Пользователи и ПИН-коды ({users.length})
             </h4>
             <p className="text-xs text-slate-500">
-              Имя кассира меняется прямо в списке. ПИН-код: от 4 до 8 цифр, у каждого пользователя свой.
+              Имя пользователя меняется прямо в списке. ПИН-код: от 4 до 8 цифр, у каждого пользователя свой.
             </p>
             <div className="space-y-2">
               {users.map((u) => (
                 <div key={u.id} className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      {u.role === 'CASHIER' ? (
-                        <input
-                          value={nameDrafts[u.id] ?? u.name}
-                          onChange={(e) => setNameDrafts((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                          onBlur={async () => {
-                            const draft = nameDrafts[u.id];
-                            if (draft !== undefined && draft !== u.name) {
-                              const error = await renameCashier(u.id, draft);
-                              setUserMessage(error ? { ok: false, text: error } : { ok: true, text: `Имя изменено: «${draft.trim()}»` });
-                            }
-                            setNameDrafts((prev) => {
-                              const { [u.id]: _, ...rest } = prev;
-                              return rest;
-                            });
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                          }}
-                          title="Нажмите, чтобы изменить имя"
-                          className="w-full font-bold text-xs bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 dark:hover:border-slate-700 rounded-lg px-1.5 py-1 -ml-1.5 text-slate-900 dark:text-white"
-                        />
-                      ) : (
-                        <div className="font-bold text-xs text-slate-900 dark:text-white truncate">{u.name}</div>
-                      )}
+                      <input
+                        value={nameDrafts[u.id] ?? u.name}
+                        onChange={(e) => setNameDrafts((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                        onBlur={async () => {
+                          const draft = nameDrafts[u.id];
+                          if (draft !== undefined && draft !== u.name) {
+                            const error = await renameUser(u.id, draft);
+                            setUserMessage(error ? { ok: false, text: error } : { ok: true, text: `Имя изменено: «${draft.trim()}»` });
+                          }
+                          setNameDrafts((prev) => {
+                            const { [u.id]: _, ...rest } = prev;
+                            return rest;
+                          });
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        }}
+                        title="Нажмите, чтобы изменить имя"
+                        className="w-full font-bold text-xs bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 dark:hover:border-slate-700 rounded-lg px-1.5 py-1 -ml-1.5 text-slate-900 dark:text-white"
+                      />
                       {u.role === 'CASHIER' && (
                         <select
                           value={stores.some((st) => st.id === u.storeId) ? u.storeId : ''}
