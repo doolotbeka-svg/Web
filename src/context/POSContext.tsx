@@ -105,6 +105,8 @@ interface POSContextType {
   saveStore: (store: Partial<Store>) => Promise<void>;
   deleteStore: (storeId: string) => Promise<string | null>;
   updateUserPin: (userId: string, pin: string) => Promise<string | null>;
+  addCashier: (name: string, pin: string, storeId?: string) => Promise<string | null>;
+  deleteCashier: (userId: string) => Promise<string | null>;
 
   // Modals
   setLastCompletedOrder: (order: Order | null) => void;
@@ -1120,6 +1122,57 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return null;
   };
 
+  // Cashiers (administrator); both return an error message on failure
+  const addCashier = async (name: string, pin: string, storeId?: string) => {
+    if (!name.trim()) return 'Укажите имя кассира';
+    if (!/^\d{4,8}$/.test(pin)) return 'ПИН-код должен состоять из 4–8 цифр';
+    if (users.some((u) => u.pinCode === pin)) return 'Такой ПИН-код уже есть у другого пользователя';
+    const id = `user-cashier-${Date.now()}`;
+    await db.users.add({
+      id,
+      name: name.trim(),
+      email: `${id}@pos.local`,
+      pinCode: pin,
+      role: 'CASHIER',
+      storeId: storeId || undefined,
+      active: true,
+    });
+    await db.auditLogs.add({
+      id: `audit-${Date.now()}`,
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      action: 'USER_CREATE',
+      entity: 'User',
+      entityId: id,
+      details: `Добавлен кассир ${name.trim()}`,
+      timestamp: Date.now(),
+    });
+    await refreshData();
+    return null;
+  };
+
+  const deleteCashier = async (userId: string) => {
+    const user = users.find((u) => u.id === userId);
+    if (!user) return 'Пользователь не найден';
+    if (user.role !== 'CASHIER') return 'Удалять можно только кассиров';
+    if (currentUser?.id === userId) return 'Нельзя удалить пользователя, который сейчас вошёл';
+    const openShift = await db.shifts.filter((sh) => sh.userId === userId && sh.status === 'OPEN').first();
+    if (openShift) return `У кассира «${user.name}» открыта смена. Сначала закройте её.`;
+    await db.users.delete(userId);
+    await db.auditLogs.add({
+      id: `audit-${Date.now()}`,
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      action: 'USER_DELETE',
+      entity: 'User',
+      entityId: userId,
+      details: `Удалён кассир ${user.name}`,
+      timestamp: Date.now(),
+    });
+    await refreshData();
+    return null;
+  };
+
   const resetDatabase = async () => {
     await initDatabase(true);
     await refreshData();
@@ -1188,6 +1241,8 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         saveStore,
         deleteStore,
         updateUserPin,
+        addCashier,
+        deleteCashier,
         setLastCompletedOrder,
         setIsReceiptModalOpen,
         cartTotals,

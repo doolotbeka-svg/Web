@@ -38,6 +38,8 @@ export const SettingsView: React.FC = () => {
     saveStore,
     deleteStore,
     updateUserPin,
+    addCashier,
+    deleteCashier,
   } = usePOS();
 
   const [activeTab, setActiveTab] = useState<'general' | 'stores' | 'users' | 'hardware' | 'backup'>('general');
@@ -64,6 +66,28 @@ export const SettingsView: React.FC = () => {
     const error = await deleteStore(storeId);
     setStoreMessage(error ? { ok: false, text: error } : { ok: true, text: `Магазин «${name}» удалён` });
     if (!error && storeForm.id === storeId) setStoreForm(emptyStoreForm);
+  };
+
+  // New cashier
+  const [cashierName, setCashierName] = useState('');
+  const [cashierPin, setCashierPin] = useState('');
+  const [cashierStore, setCashierStore] = useState('');
+  const [userMessage, setUserMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const handleAddCashier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const error = await addCashier(cashierName, cashierPin, cashierStore);
+    setUserMessage(error ? { ok: false, text: error } : { ok: true, text: `Кассир «${cashierName.trim()}» добавлен` });
+    if (!error) {
+      setCashierName('');
+      setCashierPin('');
+    }
+  };
+
+  const handleDeleteCashier = async (userId: string, name: string) => {
+    if (!confirm(`Удалить кассира «${name}»? История его чеков сохранится.`)) return;
+    const error = await deleteCashier(userId);
+    setUserMessage(error ? { ok: false, text: error } : { ok: true, text: `Кассир «${name}» удалён` });
   };
 
   const handleSavePin = async (userId: string) => {
@@ -454,20 +478,98 @@ export const SettingsView: React.FC = () => {
 
         {/* TAB: Users & PIN codes */}
         {activeTab === 'users' && (
+          <div className="space-y-4">
+          <form
+            onSubmit={handleAddCashier}
+            className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3"
+          >
+            <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+              <Plus className="w-4 h-4 text-blue-500" />
+              Новый кассир
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input
+                required
+                placeholder="Имя кассира"
+                value={cashierName}
+                onChange={(e) => setCashierName(e.target.value)}
+                className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white"
+              />
+              <input
+                required
+                type="password"
+                inputMode="numeric"
+                maxLength={8}
+                placeholder="ПИН-код (4–8 цифр)"
+                value={cashierPin}
+                onChange={(e) => setCashierPin(e.target.value.replace(/\D/g, ''))}
+                className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-mono tracking-widest"
+              />
+              <select
+                value={cashierStore}
+                onChange={(e) => setCashierStore(e.target.value)}
+                className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white"
+              >
+                <option value="">Магазин не указан</option>
+                {stores.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end">
+              <button type="submit" className="py-2 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold">
+                Добавить кассира
+              </button>
+            </div>
+          </form>
+
+          {userMessage && (
+            <div
+              className={`p-3 rounded-xl text-xs font-semibold border ${
+                userMessage.ok
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 text-rose-700 dark:text-rose-400'
+              }`}
+            >
+              {userMessage.text}
+            </div>
+          )}
+
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
             <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
               <Users className="w-4 h-4 text-blue-500" />
-              ПИН-коды пользователей
+              Пользователи и ПИН-коды ({users.length})
             </h4>
             <p className="text-xs text-slate-500">ПИН-код: от 4 до 8 цифр, у каждого пользователя свой.</p>
             <div className="space-y-2">
               {users.map((u) => (
                 <div key={u.id} className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-xs text-slate-900 dark:text-white truncate">{u.name}</span>
-                    <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 shrink-0">
-                      {u.role === 'ADMIN' ? 'Админ' : 'Кассир'}
-                    </span>
+                    <div className="min-w-0">
+                      <div className="font-bold text-xs text-slate-900 dark:text-white truncate">{u.name}</div>
+                      {u.role === 'CASHIER' && (
+                        <div className="text-[11px] text-slate-400 truncate">
+                          {stores.find((st) => st.id === u.storeId)?.name || 'Магазин не указан'}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                        {u.role === 'ADMIN' ? 'Админ' : 'Кассир'}
+                      </span>
+                      {u.role === 'CASHIER' && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCashier(u.id, u.name)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                          title="Удалить кассира"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <form
                     onSubmit={(e) => {
@@ -502,6 +604,7 @@ export const SettingsView: React.FC = () => {
                 </div>
               ))}
             </div>
+          </div>
           </div>
         )}
 
