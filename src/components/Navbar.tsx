@@ -117,7 +117,7 @@ export const Navbar: React.FC = () => {
   };
 
   // Role permissions check
-  const isAdminOrManager = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
+  const isAdmin = currentUser?.role === 'ADMIN';
 
   return (
     <header className="bg-slate-900 text-white border-b border-slate-800 shrink-0 sticky top-0 z-40 shadow-md">
@@ -230,7 +230,7 @@ export const Navbar: React.FC = () => {
             <span>Склад</span>
           </button>
 
-          {isAdminOrManager && (
+          {isAdmin && (
             <button
               onClick={() => setActiveTab('reports')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
@@ -366,7 +366,7 @@ export const Navbar: React.FC = () => {
                 {currentUser?.name.split(' ')[0]}
               </span>
               <span className="text-[10px] text-slate-400 uppercase font-mono px-1 py-0.2 bg-slate-700/60 rounded">
-                {currentUser?.role === 'ADMIN' ? 'Админ' : currentUser?.role === 'MANAGER' ? 'Управ' : 'Кассир'}
+                {currentUser?.role === 'ADMIN' ? 'Админ' : 'Кассир'}
               </span>
             </button>
 

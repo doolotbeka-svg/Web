@@ -55,7 +55,7 @@ export const SettingsView: React.FC = () => {
   };
 
   const handleResetData = async () => {
-    if (confirm('Внимание! Все локальные данные (чеки, остатки) будут сброшены к начальному демонстрационному каталогу. Продолжить?')) {
+    if (confirm('Внимание! Все локальные данные (товары, чеки, остатки) будут удалены, база вернётся к начальному состоянию с пустым каталогом. Продолжить?')) {
       await resetDatabase();
       setResetDone(true);
       setTimeout(() => setResetDone(false), 3000);
@@ -347,10 +347,10 @@ export const SettingsView: React.FC = () => {
             <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-rose-200 dark:border-rose-900/40 shadow-2xs space-y-3">
               <div className="flex items-center gap-2 text-rose-600 font-bold text-sm">
                 <AlertTriangle className="w-5 h-5" />
-                <span>Сброс и восстановление демонстрационных данных</span>
+                <span>Сброс локальной базы данных</span>
               </div>
               <p className="text-xs text-slate-500">
-                OmniPOS работает полностью автономно в вашем браузере с использованием высокопроизводительной базы данных IndexedDB (Dexie.js). Вы можете в любой момент сбросить каталог, чеки и склады к исходному идеальному состоянию.
+                OmniPOS работает полностью автономно в вашем браузере с использованием высокопроизводительной базы данных IndexedDB (Dexie.js). Вы можете в любой момент сбросить каталог, чеки и склады к начальному состоянию (магазины и пользователи сохранятся, каталог будет пустым).
               </p>
 
               {resetDone && (
@@ -364,7 +364,7 @@ export const SettingsView: React.FC = () => {
                 className="py-2.5 px-4 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 transition-all flex items-center gap-2"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span>Сбросить локальную базу к демо-состоянию</span>
+                <span>Сбросить локальную базу</span>
               </button>
             </div>
           </div>

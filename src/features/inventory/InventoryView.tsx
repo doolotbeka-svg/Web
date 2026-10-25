@@ -20,6 +20,7 @@ import type { MovementType, StockMovement } from '../../types';
 export const InventoryView: React.FC = () => {
   const {
     products,
+    variants,
     inventory,
     stores,
     currentStore,
@@ -30,7 +31,12 @@ export const InventoryView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'balances' | 'movements' | 'operation'>('balances');
   const [search, setSearch] = useState('');
   const [opType, setOpType] = useState<MovementType>('RECEIPT');
-  const [opProduct, setOpProduct] = useState<string>(products[0]?.id || '');
+  const [opProductState, setOpProduct] = useState<string>('');
+  const [opVariantState, setOpVariant] = useState<string>('');
+  // Fall back to the first product/variant so the form works when the catalog was empty on mount
+  const opProduct = products.some((p) => p.id === opProductState) ? opProductState : products[0]?.id || '';
+  const opVariants = variants.filter((v) => v.productId === opProduct);
+  const opVariant = opVariants.some((v) => v.id === opVariantState) ? opVariantState : opVariants[0]?.id || '';
   const [opQuantity, setOpQuantity] = useState<string>('10');
   const [opTargetStore, setOpTargetStore] = useState<string>(stores[1]?.id || '');
   const [opNotes, setOpNotes] = useState('');
@@ -80,10 +86,13 @@ export const InventoryView: React.FC = () => {
     const qty = parseFloat(opQuantity);
     if (isNaN(qty) || qty <= 0) return;
 
+    const variant = prod.hasVariants ? opVariants.find((v) => v.id === opVariant) : undefined;
     await saveStockMovement({
       storeId: currentStore.id,
       productId: prod.id,
       productName: prod.name,
+      variantId: variant?.id,
+      variantName: variant?.name,
       type: opType,
       quantity: qty,
       targetStoreId: opType === 'TRANSFER_OUT' ? opTargetStore : undefined,
@@ -297,6 +306,26 @@ export const InventoryView: React.FC = () => {
                   ))}
                 </select>
               </div>
+
+              {/* Variant selector */}
+              {opVariants.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Вариант:
+                  </label>
+                  <select
+                    value={opVariant}
+                    onChange={(e) => setOpVariant(e.target.value)}
+                    className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-slate-900 dark:text-white font-medium"
+                  >
+                    {opVariants.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name} ({v.sku})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Target store (for transfer) */}
               {opType === 'TRANSFER_OUT' && (

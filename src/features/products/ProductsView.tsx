@@ -52,10 +52,27 @@ export const ProductsView: React.FC = () => {
   const [formMinStock, setFormMinStock] = useState('5');
   const [formTax, setFormTax] = useState('20');
   const [formImage, setFormImage] = useState('');
-  const [formVariants, setFormVariants] = useState<{ id?: string; name: string; sku: string; barcode?: string; salePrice: number }[]>([]);
+  const [formVariants, setFormVariants] = useState<
+    { id?: string; name: string; sku: string; barcode?: string; salePrice: number; stock: Record<string, string> }[]
+  >([]);
+  // Stock per store for a product without variants
+  const [formStock, setFormStock] = useState<Record<string, string>>({});
 
-  // Permissions
-  const canEdit = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
+  // Permissions: only the administrator manages the catalog
+  const canEdit = currentUser?.role === 'ADMIN';
+
+  const emptyStock = () => Object.fromEntries(stores.map((s) => [s.id, '0']));
+  const rowStock = (productId: string, variantId?: string) =>
+    Object.fromEntries(
+      stores.map((s) => [
+        s.id,
+        String(
+          inventory.find((i) => i.productId === productId && i.storeId === s.id && i.variantId === variantId)?.quantity ?? 0
+        ),
+      ])
+    );
+  const parseStock = (st: Record<string, string>) =>
+    Object.fromEntries(Object.entries(st).map(([k, v]) => [k, parseFloat(v)]));
 
   // Stock calculator across stores
   const getProductStock = (productId: string, storeId?: string) => {
@@ -96,6 +113,7 @@ export const ProductsView: React.FC = () => {
     setFormTax('20');
     setFormImage('https://images.unsplash.com/photo-1549931319-a545dcf3bc73?auto=format&fit=crop&w=400&q=80');
     setFormVariants([]);
+    setFormStock(emptyStock());
     setIsAddModalOpen(true);
   };
 
@@ -120,8 +138,10 @@ export const ProductsView: React.FC = () => {
         sku: v.sku,
         barcode: v.barcode,
         salePrice: v.salePrice,
+        stock: rowStock(p.id, v.id),
       }));
     setFormVariants(pVars);
+    setFormStock(rowStock(p.id));
     setIsAddModalOpen(true);
   };
 
@@ -144,7 +164,8 @@ export const ProductsView: React.FC = () => {
         image: formImage.trim() || undefined,
         hasVariants: formVariants.length > 0,
       },
-      formVariants.length > 0 ? formVariants : undefined
+      formVariants.length > 0 ? formVariants.map((v) => ({ ...v, stock: parseStock(v.stock) })) : undefined,
+      parseStock(formStock)
     );
 
     setIsAddModalOpen(false);
@@ -157,6 +178,7 @@ export const ProductsView: React.FC = () => {
         name: `Вариант ${prev.length + 1}`,
         sku: `${formSku}-V${prev.length + 1}`,
         salePrice: parseFloat(formSale) || 0,
+        stock: emptyStock(),
       },
     ]);
   };
@@ -263,11 +285,13 @@ export const ProductsView: React.FC = () => {
 
         {/* Right CTA: Import / Export / Add Product */}
         <div className="flex items-center gap-2">
+          {canEdit && (
           <label className="cursor-pointer py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 transition-colors">
             <Upload className="w-3.5 h-3.5 text-blue-500" />
             <span className="hidden md:inline">Импорт CSV</span>
             <input type="file" accept=".csv" onChange={handleImportCSV} className="hidden" />
           </label>
+          )}
 
           <button
             onClick={handleExportCSV}
@@ -654,6 +678,58 @@ export const ProductsView: React.FC = () => {
                     </button>
                   </div>
                 ))}
+              </div>
+
+              {/* Stock per store */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Остатки по магазинам ({formUnit})
+                </span>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-slate-500">
+                        <th className="text-left font-semibold py-1 pr-2">{formVariants.length > 0 ? 'Вариант' : 'Товар'}</th>
+                        {stores.map((st) => (
+                          <th key={st.id} className="text-left font-semibold py-1 px-1">
+                            {st.name.split('«')[1]?.split('»')[0] || st.name}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(formVariants.length > 0
+                        ? formVariants.map((v, idx) => ({ label: v.name || `Вариант ${idx + 1}`, stock: v.stock, idx }))
+                        : [{ label: formName || 'Без вариантов', stock: formStock, idx: -1 }]
+                      ).map((row) => (
+                        <tr key={row.idx}>
+                          <td className="py-1 pr-2 text-slate-700 dark:text-slate-300 truncate max-w-[140px]">{row.label}</td>
+                          {stores.map((st) => (
+                            <td key={st.id} className="py-1 px-1">
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={row.stock[st.id] ?? '0'}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (row.idx < 0) {
+                                    setFormStock((prev) => ({ ...prev, [st.id]: val }));
+                                  } else {
+                                    setFormVariants((prev) =>
+                                      prev.map((v, i) => (i === row.idx ? { ...v, stock: { ...v.stock, [st.id]: val } } : v))
+                                    );
+                                  }
+                                }}
+                                className="w-20 text-xs font-bold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1.5"
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
             </div>
