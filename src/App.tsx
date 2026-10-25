@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { POSProvider, usePOS } from './context/POSContext';
 import { Navbar } from './components/Navbar';
 import { POSView } from './features/pos/POSView';
@@ -14,7 +14,14 @@ import { ReportsView } from './features/reports/ReportsView';
 import { SettingsView } from './features/settings/SettingsView';
 
 const MainLayout: React.FC = () => {
-  const { activeTab } = usePOS();
+  const { activeTab, setActiveTab, currentUser } = usePOS();
+
+  // Reports and settings are admin-only; leave them when switching to a cashier
+  const isAdmin = currentUser?.role === 'ADMIN';
+  const isAdminTab = activeTab === 'reports' || activeTab === 'settings';
+  useEffect(() => {
+    if (currentUser && !isAdmin && isAdminTab) setActiveTab('pos');
+  }, [currentUser, isAdmin, isAdminTab, setActiveTab]);
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
@@ -24,8 +31,8 @@ const MainLayout: React.FC = () => {
         {activeTab === 'products' && <ProductsView />}
         {activeTab === 'sales' && <SalesView />}
         {activeTab === 'inventory' && <InventoryView />}
-        {activeTab === 'reports' && <ReportsView />}
-        {activeTab === 'settings' && <SettingsView />}
+        {isAdmin && activeTab === 'reports' && <ReportsView />}
+        {isAdmin && activeTab === 'settings' && <SettingsView />}
       </main>
     </div>
   );
