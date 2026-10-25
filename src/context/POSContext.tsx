@@ -51,7 +51,8 @@ interface POSContextType {
   // Actions
   setActiveTab: (tab: 'pos' | 'products' | 'sales' | 'inventory' | 'reports' | 'settings') => void;
   switchStore: (storeId: string) => Promise<void>;
-  switchUser: (userId: string, pin?: string) => Promise<boolean>;
+  switchUser: (userId: string, pin: string) => Promise<boolean>;
+  logout: () => void;
   updateSettings: (newSettings: Partial<POSSettings>) => Promise<void>;
   setLanguage: (lang: 'ru' | 'en') => Promise<void>;
   setCurrency: (curr: string) => Promise<void>;
@@ -209,13 +210,8 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const store = (currentSettings && allStores.find((s) => s.id === currentSettings.storeId)) || allStores[0] || null;
     setCurrentStore(store);
 
-    // Set active user (keep the currently selected user across refreshes)
-    // Never default to the administrator: that requires a PIN
-    const defaultUser =
-      allUsers.find((u) => u.role === 'CASHIER' && u.storeId === store?.id) ||
-      allUsers.find((u) => u.role !== 'ADMIN') ||
-      null;
-    setCurrentUser((prev) => (prev && allUsers.find((u) => u.id === prev.id)) || defaultUser);
+    // Keep the signed-in user across refreshes; nobody is signed in until a PIN is entered
+    setCurrentUser((prev) => (prev && allUsers.find((u) => u.id === prev.id)) || null);
 
     // Check open shift
     if (store) {
@@ -261,17 +257,23 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     sound.playKeypadClick();
   };
 
-  // Switch user; the administrator requires their PIN code
-  const switchUser = async (userId: string, pin?: string) => {
+  // Sign in / switch user; every user requires their PIN code
+  const switchUser = async (userId: string, pin: string) => {
     const user = users.find((u) => u.id === userId);
     if (!user) return false;
-    if (user.role === 'ADMIN' && pin !== user.pinCode) {
+    if (pin !== user.pinCode) {
       sound.playErrorBuzzer();
       return false;
     }
     setCurrentUser(user);
     sound.playKeypadClick();
     return true;
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    setActiveTab('pos');
+    sound.playKeypadClick();
   };
 
   const updateSettings = async (newSettings: Partial<POSSettings>) => {
@@ -1066,6 +1068,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveTab,
         switchStore,
         switchUser,
+        logout,
         updateSettings,
         setLanguage,
         setCurrency,
