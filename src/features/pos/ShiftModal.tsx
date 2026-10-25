@@ -62,7 +62,8 @@ export const ShiftModal: React.FC<ShiftModalProps> = ({ onClose }) => {
 
   const handleCloseShift = async (e: React.FormEvent) => {
     e.preventDefault();
-    const actualCash = parseFloat(closingCash) || expectedCashInDrawer;
+    const parsedCash = parseFloat(closingCash);
+    const actualCash = isNaN(parsedCash) ? expectedCashInDrawer : parsedCash;
     await closeShift(actualCash, `Фактическая сумма: ${actualCash} ₽ (Расчетная: ${expectedCashInDrawer} ₽)`);
     onClose();
   };

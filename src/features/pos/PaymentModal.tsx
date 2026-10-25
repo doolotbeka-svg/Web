@@ -93,7 +93,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ onClose }) => {
   const isSufficient = effectivePaid >= totalAmount;
 
   const handleCompletePayment = async () => {
-    if (!isSufficient && paymentMethod === 'CASH') return;
+    if (!isSufficient || isProcessing) return;
     setIsProcessing(true);
 
     try {
@@ -485,10 +485,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ onClose }) => {
 
           <button
             type="button"
-            disabled={!isSufficient && paymentMethod === 'CASH'}
+            disabled={!isSufficient || isProcessing}
             onClick={handleCompletePayment}
             className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm text-white shadow-lg transition-all flex items-center justify-center gap-2 ${
-              isSufficient || paymentMethod !== 'CASH'
+              isSufficient && !isProcessing
                 ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30'
                 : 'bg-slate-400 cursor-not-allowed'
             }`}
