@@ -15,6 +15,11 @@ import {
   History,
   FileText,
   AlertTriangle,
+  Plus,
+  Edit2,
+  Trash2,
+  KeyRound,
+  Users,
 } from 'lucide-react';
 import { usePOS } from '../../context/POSContext';
 import { sound } from '../../lib/sound';
@@ -30,9 +35,42 @@ export const SettingsView: React.FC = () => {
     setLanguage,
     setCurrency,
     resetDatabase,
+    saveStore,
+    deleteStore,
+    updateUserPin,
   } = usePOS();
 
-  const [activeTab, setActiveTab] = useState<'general' | 'stores' | 'hardware' | 'backup'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'stores' | 'users' | 'hardware' | 'backup'>('general');
+
+  // Store form (add / edit)
+  const emptyStoreForm = { id: '', name: '', code: '', address: '', phone: '', taxNumber: '' };
+  const [storeForm, setStoreForm] = useState(emptyStoreForm);
+  const [storeMessage, setStoreMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // PIN changes
+  const [pinDrafts, setPinDrafts] = useState<Record<string, string>>({});
+  const [pinMessage, setPinMessage] = useState<{ userId: string; ok: boolean; text: string } | null>(null);
+
+  const handleSaveStore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!storeForm.name.trim()) return;
+    await saveStore({ ...storeForm, id: storeForm.id || undefined });
+    setStoreMessage({ ok: true, text: storeForm.id ? 'Магазин сохранён' : 'Магазин добавлен' });
+    setStoreForm(emptyStoreForm);
+  };
+
+  const handleDeleteStore = async (storeId: string, name: string) => {
+    if (!confirm(`Удалить магазин «${name}»? Остатки товаров в нём будут удалены, история чеков сохранится.`)) return;
+    const error = await deleteStore(storeId);
+    setStoreMessage(error ? { ok: false, text: error } : { ok: true, text: `Магазин «${name}» удалён` });
+    if (!error && storeForm.id === storeId) setStoreForm(emptyStoreForm);
+  };
+
+  const handleSavePin = async (userId: string) => {
+    const error = await updateUserPin(userId, pinDrafts[userId] || '');
+    setPinMessage(error ? { userId, ok: false, text: error } : { userId, ok: true, text: 'ПИН-код изменён' });
+    if (!error) setPinDrafts((prev) => ({ ...prev, [userId]: '' }));
+  };
   const [resetDone, setResetDone] = useState(false);
   const [testBarcode, setTestBarcode] = useState('');
   const [testResult, setTestResult] = useState<string | null>(null);
@@ -108,6 +146,16 @@ export const SettingsView: React.FC = () => {
             }`}
           >
             Магазины
+          </button>
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              activeTab === 'users'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            Пользователи
           </button>
           <button
             onClick={() => setActiveTab('backup')}
@@ -306,6 +354,49 @@ export const SettingsView: React.FC = () => {
         {/* TAB 3: Stores */}
         {activeTab === 'stores' && (
           <div className="space-y-4">
+            <form
+              onSubmit={handleSaveStore}
+              className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3"
+            >
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                {storeForm.id ? <Edit2 className="w-4 h-4 text-blue-500" /> : <Plus className="w-4 h-4 text-blue-500" />}
+                {storeForm.id ? 'Изменение магазина' : 'Новый магазин'}
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input required placeholder="Название магазина" value={storeForm.name} onChange={(e) => setStoreForm({ ...storeForm, name: e.target.value })} className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white sm:col-span-2" />
+                <input placeholder="Адрес" value={storeForm.address} onChange={(e) => setStoreForm({ ...storeForm, address: e.target.value })} className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white" />
+                <input placeholder="Телефон" value={storeForm.phone} onChange={(e) => setStoreForm({ ...storeForm, phone: e.target.value })} className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white" />
+                <input placeholder="ИНН" value={storeForm.taxNumber} onChange={(e) => setStoreForm({ ...storeForm, taxNumber: e.target.value })} className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white" />
+                <input placeholder="Код (необязательно)" value={storeForm.code} onChange={(e) => setStoreForm({ ...storeForm, code: e.target.value })} className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-mono" />
+              </div>
+              <div className="flex justify-end gap-2">
+                {storeForm.id && (
+                  <button
+                    type="button"
+                    onClick={() => setStoreForm(emptyStoreForm)}
+                    className="py-2 px-4 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300"
+                  >
+                    Отмена
+                  </button>
+                )}
+                <button type="submit" className="py-2 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold">
+                  {storeForm.id ? 'Сохранить' : 'Добавить магазин'}
+                </button>
+              </div>
+            </form>
+
+            {storeMessage && (
+              <div
+                className={`p-3 rounded-xl text-xs font-semibold border ${
+                  storeMessage.ok
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 text-emerald-700 dark:text-emerald-400'
+                    : 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 text-rose-700 dark:text-rose-400'
+                }`}
+              >
+                {storeMessage.text}
+              </div>
+            )}
+
             <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
               <h4 className="font-bold text-sm text-slate-900 dark:text-white">
                 Торговые точки и филиалы сети ({stores.length})
@@ -314,29 +405,102 @@ export const SettingsView: React.FC = () => {
                 {stores.map((s) => (
                   <div
                     key={s.id}
-                    className={`p-3.5 rounded-xl border flex items-center justify-between ${
+                    className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
                       currentStore?.id === s.id
                         ? 'bg-blue-50/70 border-blue-500 dark:bg-blue-950/40'
                         : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800'
                     }`}
                   >
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-slate-900 dark:text-white">{s.name}</span>
+                        <span className="font-bold text-xs text-slate-900 dark:text-white truncate">{s.name}</span>
                         {currentStore?.id === s.id && (
-                          <span className="text-[10px] font-bold bg-blue-600 text-white px-1.5 py-0.2 rounded">
+                          <span className="text-[10px] font-bold bg-blue-600 text-white px-1.5 py-0.2 rounded shrink-0">
                             Активная
                           </span>
                         )}
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
-                        {s.address} • Тел: {s.phone} • ИНН: {s.taxNumber}
+                        {[s.address, s.phone && `Тел: ${s.phone}`, s.taxNumber && `ИНН: ${s.taxNumber}`].filter(Boolean).join(' • ') || 'Нет данных'}
                       </div>
                     </div>
-                    <span className="font-mono text-xs font-bold text-slate-500">{s.code}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="font-mono text-xs font-bold text-slate-500 mr-1">{s.code}</span>
+                      <button
+                        onClick={() => {
+                          setStoreForm({ id: s.id, name: s.name, code: s.code, address: s.address, phone: s.phone, taxNumber: s.taxNumber });
+                          setStoreMessage(null);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                        title="Изменить магазин"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteStore(s.id, s.name)}
+                        disabled={stores.length <= 1}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-30"
+                        title="Удалить магазин"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: Users & PIN codes */}
+        {activeTab === 'users' && (
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
+            <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+              <Users className="w-4 h-4 text-blue-500" />
+              ПИН-коды пользователей
+            </h4>
+            <p className="text-xs text-slate-500">ПИН-код: от 4 до 8 цифр, у каждого пользователя свой.</p>
+            <div className="space-y-2">
+              {users.map((u) => (
+                <div key={u.id} className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-xs text-slate-900 dark:text-white truncate">{u.name}</span>
+                    <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 shrink-0">
+                      {u.role === 'ADMIN' ? 'Админ' : 'Кассир'}
+                    </span>
+                  </div>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSavePin(u.id);
+                    }}
+                    className="flex gap-2"
+                  >
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={8}
+                      placeholder="Новый ПИН-код"
+                      value={pinDrafts[u.id] || ''}
+                      onChange={(e) => setPinDrafts((prev) => ({ ...prev, [u.id]: e.target.value.replace(/\D/g, '') }))}
+                      className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white flex-1 font-mono tracking-widest"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!pinDrafts[u.id]}
+                      className="py-2 px-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-400 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      Сменить
+                    </button>
+                  </form>
+                  {pinMessage?.userId === u.id && (
+                    <div className={`text-xs font-semibold ${pinMessage.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                      {pinMessage.text}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
