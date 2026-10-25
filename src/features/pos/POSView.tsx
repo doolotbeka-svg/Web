@@ -45,7 +45,9 @@ export const POSView: React.FC = () => {
     setIsReceiptModalOpen,
   } = usePOS();
 
-  const [selectedCategory, setSelectedCategory] = useState<string>('cat-all');
+  const [selectedCategoryState, setSelectedCategory] = useState<string>('cat-all');
+  // Fall back to "all products" if the selected category was deleted
+  const selectedCategory = categories.some((c) => c.id === selectedCategoryState) ? selectedCategoryState : 'cat-all';
   const [searchQuery, setSearchQuery] = useState('');
   const [activeVariantProduct, setActiveVariantProduct] = useState<Product | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);

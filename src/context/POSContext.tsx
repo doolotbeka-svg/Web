@@ -94,6 +94,9 @@ interface POSContextType {
     stock?: Record<string, number>
   ) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
+  saveCategory: (category: { id?: string; name: string }) => Promise<void>;
+  moveCategory: (categoryId: string, direction: -1 | 1) => Promise<void>;
+  deleteCategory: (categoryId: string) => Promise<boolean>;
   saveCustomer: (customer: Partial<Customer>) => Promise<Customer>;
   saveStockMovement: (movement: Omit<StockMovement, 'id' | 'createdAt'>) => Promise<void>;
   refreshData: () => Promise<void>;
@@ -928,6 +931,41 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await refreshData();
   };
 
+  // Categories ('cat-all' is the built-in "all products" filter and is not editable)
+  const saveCategory = async (catData: { id?: string; name: string }) => {
+    const existing = categories.find((c) => c.id === catData.id);
+    const id = existing?.id || `cat-${Date.now()}`;
+    await db.categories.put({
+      ...existing,
+      id,
+      name: catData.name.trim() || 'Новая категория',
+      slug: existing?.slug || id,
+      order: existing?.order ?? Math.max(0, ...categories.map((c) => c.order)) + 1,
+    });
+    await refreshData();
+  };
+
+  const moveCategory = async (categoryId: string, direction: -1 | 1) => {
+    const list = categories.filter((c) => c.slug !== 'all');
+    const idx = list.findIndex((c) => c.id === categoryId);
+    const other = list[idx + direction];
+    if (idx < 0 || !other) return;
+    const current = list[idx];
+    await db.categories.bulkPut([
+      { ...current, order: other.order },
+      { ...other, order: current.order },
+    ]);
+    await refreshData();
+  };
+
+  // Refuses (returns false) while products still use the category
+  const deleteCategory = async (categoryId: string) => {
+    if (categoryId === 'cat-all' || products.some((p) => p.categoryId === categoryId)) return false;
+    await db.categories.delete(categoryId);
+    await refreshData();
+    return true;
+  };
+
   const saveCustomer = async (custData: Partial<Customer>): Promise<Customer> => {
     const custId = custData.id || `cust-${Date.now()}`;
     const cust: Customer = {
@@ -1043,6 +1081,9 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refundOrder,
         saveProduct,
         deleteProduct,
+        saveCategory,
+        moveCategory,
+        deleteCategory,
         saveCustomer,
         saveStockMovement,
         refreshData,

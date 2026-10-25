@@ -15,6 +15,9 @@ import {
   X,
   Check,
   Building,
+  Tags,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { usePOS } from '../../context/POSContext';
 import { generateBarcodeSvg } from '../../lib/escpos';
@@ -32,6 +35,9 @@ export const ProductsView: React.FC = () => {
     currentUser,
     saveProduct,
     deleteProduct,
+    saveCategory,
+    moveCategory,
+    deleteCategory,
   } = usePOS();
 
   const [search, setSearch] = useState('');
@@ -40,6 +46,14 @@ export const ProductsView: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [labelProduct, setLabelProduct] = useState<Product | null>(null);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [categoryNames, setCategoryNames] = useState<Record<string, string>>({});
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+
+  // Editable categories (the built-in "all products" filter is excluded)
+  const editableCategories = categories.filter((c) => c.slug !== 'all');
+  const activeCategory = editableCategories.some((c) => c.id === selectedCategory) ? selectedCategory : 'all';
 
   // Form State for Add / Edit
   const [formName, setFormName] = useState('');
@@ -84,7 +98,7 @@ export const ProductsView: React.FC = () => {
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
-      const matchesCat = selectedCategory === 'all' || p.categoryId === selectedCategory;
+      const matchesCat = activeCategory === 'all' || p.categoryId === activeCategory;
       const q = search.trim().toLowerCase();
       const matchesSearch =
         !q ||
@@ -97,7 +111,7 @@ export const ProductsView: React.FC = () => {
 
       return matchesCat && matchesSearch && matchesStock;
     });
-  }, [products, selectedCategory, search, lowStockOnly, currentStore, inventory]);
+  }, [products, activeCategory, search, lowStockOnly, currentStore, inventory]);
 
   const openAddModal = () => {
     setEditingProduct(null);
@@ -105,7 +119,7 @@ export const ProductsView: React.FC = () => {
     const randomSku = `SKU-${Math.floor(100000 + Math.random() * 900000)}`;
     setFormSku(randomSku);
     setFormBarcode(`460${Math.floor(100000000 + Math.random() * 900000000)}`);
-    setFormCatId(categories[1]?.id || 'cat-bakery');
+    setFormCatId(editableCategories[0]?.id || '');
     setFormUnit('шт');
     setFormCost('100');
     setFormSale('180');
@@ -258,7 +272,7 @@ export const ProductsView: React.FC = () => {
           </div>
 
           <select
-            value={selectedCategory}
+            value={activeCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-700 dark:text-slate-300 font-medium"
           >
@@ -300,6 +314,20 @@ export const ProductsView: React.FC = () => {
             <Download className="w-3.5 h-3.5 text-emerald-500" />
             <span className="hidden md:inline">Экспорт</span>
           </button>
+
+          {canEdit && (
+            <button
+              onClick={() => {
+                setCategoryNames({});
+                setCategoryError(null);
+                setIsCategoryModalOpen(true);
+              }}
+              className="py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 transition-colors"
+            >
+              <Tags className="w-3.5 h-3.5 text-indigo-500" />
+              <span className="hidden md:inline">Категории</span>
+            </button>
+          )}
 
           {canEdit && (
             <button
@@ -750,6 +778,125 @@ export const ProductsView: React.FC = () => {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Categories Management Modal */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
+              <h3 className="font-bold text-sm">Категории товаров</h3>
+              <button
+                type="button"
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-3">
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!newCategoryName.trim()) return;
+                  await saveCategory({ name: newCategoryName });
+                  setNewCategoryName('');
+                  setCategoryError(null);
+                }}
+                className="flex gap-2"
+              >
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="Название новой категории"
+                  className="flex-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white"
+                />
+                <button
+                  type="submit"
+                  className="py-2 px-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Добавить</span>
+                </button>
+              </form>
+
+              {categoryError && (
+                <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl text-xs font-semibold text-rose-700 dark:text-rose-400">
+                  {categoryError}
+                </div>
+              )}
+
+              {editableCategories.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-6">Категорий пока нет</p>
+              ) : (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                  {editableCategories.map((cat, idx) => {
+                    const productCount = products.filter((p) => p.categoryId === cat.id).length;
+                    const draft = categoryNames[cat.id] ?? cat.name;
+                    return (
+                      <div key={cat.id} className="flex items-center gap-2 px-3 py-2">
+                        <input
+                          type="text"
+                          value={draft}
+                          onChange={(e) => setCategoryNames((prev) => ({ ...prev, [cat.id]: e.target.value }))}
+                          onBlur={async () => {
+                            if (draft.trim() && draft !== cat.name) await saveCategory({ id: cat.id, name: draft });
+                            setCategoryNames((prev) => {
+                              const { [cat.id]: _, ...rest } = prev;
+                              return rest;
+                            });
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                          }}
+                          className="flex-1 min-w-0 text-xs font-semibold bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 dark:hover:border-slate-700 rounded-lg px-2 py-1.5 text-slate-900 dark:text-white"
+                        />
+                        <span className="text-[11px] text-slate-400 shrink-0">{productCount} тов.</span>
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => moveCategory(cat.id, -1)}
+                          className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg disabled:opacity-30"
+                          title="Выше"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === editableCategories.length - 1}
+                          onClick={() => moveCategory(cat.id, 1)}
+                          className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg disabled:opacity-30"
+                          title="Ниже"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!confirm(`Удалить категорию "${cat.name}"?`)) return;
+                            const ok = await deleteCategory(cat.id);
+                            setCategoryError(
+                              ok ? null : `В категории «${cat.name}» есть товары (${productCount}). Сначала перенесите их в другую категорию.`
+                            );
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                          title="Удалить категорию"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-[11px] text-slate-400">
+                Название меняется прямо в списке. Порядок категорий совпадает с порядком кнопок на кассе.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
