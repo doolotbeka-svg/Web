@@ -40,6 +40,7 @@ export const SettingsView: React.FC = () => {
     updateUserPin,
     addCashier,
     deleteCashier,
+    updateCashierStore,
   } = usePOS();
 
   const [activeTab, setActiveTab] = useState<'general' | 'stores' | 'users' | 'hardware' | 'backup'>('general');
@@ -510,7 +511,7 @@ export const SettingsView: React.FC = () => {
                 onChange={(e) => setCashierStore(e.target.value)}
                 className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white"
               >
-                <option value="">Магазин не указан</option>
+                <option value="">Все магазины</option>
                 {stores.map((st) => (
                   <option key={st.id} value={st.id}>
                     {st.name}
@@ -550,9 +551,19 @@ export const SettingsView: React.FC = () => {
                     <div className="min-w-0">
                       <div className="font-bold text-xs text-slate-900 dark:text-white truncate">{u.name}</div>
                       {u.role === 'CASHIER' && (
-                        <div className="text-[11px] text-slate-400 truncate">
-                          {stores.find((st) => st.id === u.storeId)?.name || 'Магазин не указан'}
-                        </div>
+                        <select
+                          value={stores.some((st) => st.id === u.storeId) ? u.storeId : ''}
+                          onChange={(e) => updateCashierStore(u.id, e.target.value || undefined)}
+                          className="mt-1 max-w-full text-[11px] bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-slate-600 dark:text-slate-300"
+                          title="Магазин, в котором работает кассир"
+                        >
+                          <option value="">Все магазины</option>
+                          {stores.map((st) => (
+                            <option key={st.id} value={st.id}>
+                              {st.name}
+                            </option>
+                          ))}
+                        </select>
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">

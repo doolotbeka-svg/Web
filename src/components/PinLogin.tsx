@@ -66,7 +66,7 @@ export const PinForm: React.FC<PinFormProps> = ({ userId, onSuccess, onCancel })
 
 // Shown while nobody is signed in
 export const LoginScreen: React.FC = () => {
-  const { users } = usePOS();
+  const { users, stores } = usePOS();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   return (
@@ -89,7 +89,14 @@ export const LoginScreen: React.FC = () => {
                   onClick={() => setSelectedUserId(u.id)}
                   className="w-full text-left px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm text-white flex items-center justify-between gap-3 transition-colors"
                 >
-                  <span className="truncate">{u.name}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate">{u.name}</span>
+                    {u.role === 'CASHIER' && stores.some((st) => st.id === u.storeId) && (
+                      <span className="block text-[11px] text-slate-400 truncate">
+                        {stores.find((st) => st.id === u.storeId)?.name}
+                      </span>
+                    )}
+                  </span>
                   <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-black/30 text-slate-300 shrink-0">
                     {u.role === 'ADMIN' ? 'Админ' : 'Кассир'}
                   </span>
