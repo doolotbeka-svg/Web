@@ -1,0 +1,40 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react';
+import { POSProvider, usePOS } from './context/POSContext';
+import { Navbar } from './components/Navbar';
+import { POSView } from './features/pos/POSView';
+import { ProductsView } from './features/products/ProductsView';
+import { SalesView } from './features/sales/SalesView';
+import { InventoryView } from './features/inventory/InventoryView';
+import { ReportsView } from './features/reports/ReportsView';
+import { SettingsView } from './features/settings/SettingsView';
+
+const MainLayout: React.FC = () => {
+  const { activeTab } = usePOS();
+
+  return (
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
+      <Navbar />
+      <main className="flex-1 flex overflow-hidden">
+        {activeTab === 'pos' && <POSView />}
+        {activeTab === 'products' && <ProductsView />}
+        {activeTab === 'sales' && <SalesView />}
+        {activeTab === 'inventory' && <InventoryView />}
+        {activeTab === 'reports' && <ReportsView />}
+        {activeTab === 'settings' && <SettingsView />}
+      </main>
+    </div>
+  );
+};
+
+export default function App() {
+  return (
+    <POSProvider>
+      <MainLayout />
+    </POSProvider>
+  );
+}
