@@ -22,6 +22,8 @@ import {
   Minimize,
   ChevronDown,
   Sparkles,
+  Lock,
+  X,
 } from 'lucide-react';
 import { usePOS } from '../context/POSContext';
 import { ShiftModal } from '../features/pos/ShiftModal';
@@ -51,6 +53,9 @@ export const Navbar: React.FC = () => {
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [isStoreMenuOpen, setIsStoreMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [pinUserId, setPinUserId] = useState<string | null>(null);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState(false);
   const [isHeldMenuOpen, setIsHeldMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -382,8 +387,14 @@ export const Navbar: React.FC = () => {
                   <button
                     key={u.id}
                     onClick={() => {
-                      switchUser(u.id);
                       setIsUserMenuOpen(false);
+                      if (u.role === 'ADMIN' && currentUser?.id !== u.id) {
+                        setPinUserId(u.id);
+                        setPinInput('');
+                        setPinError(false);
+                      } else {
+                        switchUser(u.id);
+                      }
                     }}
                     className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors ${
                       currentUser?.id === u.id ? 'bg-blue-600 text-white font-medium' : 'text-slate-300 hover:bg-slate-800'
@@ -391,7 +402,11 @@ export const Navbar: React.FC = () => {
                   >
                     <div className="flex flex-col">
                       <span className="truncate">{u.name}</span>
-                      <span className="text-[10px] opacity-75 font-mono">ПИН: {u.pinCode}</span>
+                      {u.role === 'ADMIN' && (
+                        <span className="text-[10px] opacity-75 flex items-center gap-1">
+                          <Lock className="w-3 h-3" /> Вход по ПИН-коду
+                        </span>
+                      )}
                     </div>
                     <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-black/20">
                       {u.role}
@@ -441,6 +456,62 @@ export const Navbar: React.FC = () => {
         </div>
 
       </div>
+
+      {/* Admin PIN Modal */}
+      {pinUserId && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const ok = await switchUser(pinUserId, pinInput);
+              if (ok) {
+                setPinUserId(null);
+              } else {
+                setPinError(true);
+                setPinInput('');
+              }
+            }}
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-xs shadow-2xl p-5 space-y-4 text-slate-900 dark:text-white"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-sm flex items-center gap-2">
+                <Lock className="w-4 h-4 text-blue-500" />
+                Вход администратора
+              </h4>
+              <button
+                type="button"
+                onClick={() => setPinUserId(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoFocus
+              maxLength={8}
+              value={pinInput}
+              onChange={(e) => {
+                setPinInput(e.target.value.replace(/\D/g, ''));
+                setPinError(false);
+              }}
+              placeholder="ПИН-код"
+              className="w-full text-center text-2xl font-mono tracking-[0.5em] bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2.5"
+            />
+            {pinError && (
+              <div className="text-xs font-semibold text-rose-600 dark:text-rose-400 text-center">Неверный ПИН-код</div>
+            )}
+            <button
+              type="submit"
+              disabled={!pinInput}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-400 text-white rounded-xl text-xs font-bold"
+            >
+              Войти
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* Shift Modal */}
       {isShiftModalOpen && <ShiftModal onClose={() => setIsShiftModalOpen(false)} />}

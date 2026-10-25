@@ -51,7 +51,7 @@ interface POSContextType {
   // Actions
   setActiveTab: (tab: 'pos' | 'products' | 'sales' | 'inventory' | 'reports' | 'settings') => void;
   switchStore: (storeId: string) => Promise<void>;
-  switchUser: (userId: string) => Promise<void>;
+  switchUser: (userId: string, pin?: string) => Promise<boolean>;
   updateSettings: (newSettings: Partial<POSSettings>) => Promise<void>;
   setLanguage: (lang: 'ru' | 'en') => Promise<void>;
   setCurrency: (curr: string) => Promise<void>;
@@ -210,7 +210,11 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentStore(store);
 
     // Set active user (keep the currently selected user across refreshes)
-    const defaultUser = allUsers.find((u) => u.role === 'CASHIER' && u.storeId === store?.id) || allUsers[0] || null;
+    // Never default to the administrator: that requires a PIN
+    const defaultUser =
+      allUsers.find((u) => u.role === 'CASHIER' && u.storeId === store?.id) ||
+      allUsers.find((u) => u.role !== 'ADMIN') ||
+      null;
     setCurrentUser((prev) => (prev && allUsers.find((u) => u.id === prev.id)) || defaultUser);
 
     // Check open shift
@@ -257,12 +261,17 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     sound.playKeypadClick();
   };
 
-  // Switch user (for cashier shift change or testing admin / manager roles)
-  const switchUser = async (userId: string) => {
+  // Switch user; the administrator requires their PIN code
+  const switchUser = async (userId: string, pin?: string) => {
     const user = users.find((u) => u.id === userId);
-    if (!user) return;
+    if (!user) return false;
+    if (user.role === 'ADMIN' && pin !== user.pinCode) {
+      sound.playErrorBuzzer();
+      return false;
+    }
     setCurrentUser(user);
     sound.playKeypadClick();
+    return true;
   };
 
   const updateSettings = async (newSettings: Partial<POSSettings>) => {

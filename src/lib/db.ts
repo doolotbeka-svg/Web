@@ -74,6 +74,13 @@ export class OmniPOSDatabase extends Dexie {
         p.categoryId = 'cat-all';
       });
     });
+
+    // v4: administrator PIN 7777
+    this.version(4).stores({}).upgrade(async (tx) => {
+      await tx.table('users').where('role').equals('ADMIN').modify((u: User) => {
+        u.pinCode = '7777';
+      });
+    });
   }
 }
 
@@ -127,7 +134,7 @@ export const INITIAL_USERS: User[] = [
     id: 'user-admin',
     name: 'Алексей Романов (Администратор)',
     email: 'admin@pos.local',
-    pinCode: '0000',
+    pinCode: '7777',
     role: 'ADMIN',
     active: true,
   },
