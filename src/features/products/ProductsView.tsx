@@ -59,7 +59,7 @@ export const ProductsView: React.FC = () => {
   const [formName, setFormName] = useState('');
   const [formSku, setFormSku] = useState('');
   const [formBarcode, setFormBarcode] = useState('');
-  const [formCatId, setFormCatId] = useState('cat-bakery');
+  const [formCatId, setFormCatId] = useState('cat-all');
   const [formUnit, setFormUnit] = useState('шт');
   const [formCost, setFormCost] = useState('0');
   const [formSale, setFormSale] = useState('0');
@@ -119,7 +119,7 @@ export const ProductsView: React.FC = () => {
     const randomSku = `SKU-${Math.floor(100000 + Math.random() * 900000)}`;
     setFormSku(randomSku);
     setFormBarcode(`460${Math.floor(100000000 + Math.random() * 900000000)}`);
-    setFormCatId(editableCategories[0]?.id || '');
+    setFormCatId(editableCategories[0]?.id || 'cat-all');
     setFormUnit('шт');
     setFormCost('100');
     setFormSale('180');
@@ -136,7 +136,7 @@ export const ProductsView: React.FC = () => {
     setFormName(p.name);
     setFormSku(p.sku);
     setFormBarcode(p.barcode || '');
-    setFormCatId(p.categoryId);
+    setFormCatId(editableCategories.some((c) => c.id === p.categoryId) ? p.categoryId : 'cat-all');
     setFormUnit(p.unit);
     setFormCost(p.costPrice.toString());
     setFormSale(p.salePrice.toString());
@@ -205,7 +205,7 @@ export const ProductsView: React.FC = () => {
   const handleExportCSV = () => {
     const headers = ['Артикул', 'Наименование', 'Категория', 'Штрихкод', 'Закупка', 'Розница', 'Остаток', 'Ед.изм'];
     const rows = products.map((p) => {
-      const cat = categories.find((c) => c.id === p.categoryId)?.name || '';
+      const cat = editableCategories.find((c) => c.id === p.categoryId)?.name || '';
       const stock = getProductStock(p.id, currentStore?.id);
       return [p.sku, `"${p.name}"`, `"${cat}"`, p.barcode || '', p.costPrice, p.salePrice, stock, p.unit];
     });
@@ -242,7 +242,7 @@ export const ProductsView: React.FC = () => {
               salePrice: parseFloat(parts[5]) || 150,
               costPrice: parseFloat(parts[4]) || 80,
               unit: parts[7] || 'шт',
-              categoryId: categories[1]?.id || 'cat-grocery',
+              categoryId: editableCategories[0]?.id || 'cat-all',
             });
           }
         }
@@ -368,7 +368,7 @@ export const ProductsView: React.FC = () => {
                   </tr>
                 ) : (
                   filteredProducts.map((prod) => {
-                    const cat = categories.find((c) => c.id === prod.categoryId);
+                    const cat = editableCategories.find((c) => c.id === prod.categoryId);
                     const stock = getProductStock(prod.id, currentStore?.id);
                     const allStoresStock = getProductStock(prod.id);
                     const isLow = stock <= prod.minStockAlert;
@@ -571,7 +571,8 @@ export const ProductsView: React.FC = () => {
                     onChange={(e) => setFormCatId(e.target.value)}
                     className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white"
                   >
-                    {categories.filter((c) => c.slug !== 'all').map((c) => (
+                    <option value="cat-all">Без категории</option>
+                    {editableCategories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
