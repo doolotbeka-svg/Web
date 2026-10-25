@@ -102,6 +102,9 @@ interface POSContextType {
   saveStockMovement: (movement: Omit<StockMovement, 'id' | 'createdAt'>) => Promise<void>;
   refreshData: () => Promise<void>;
   resetDatabase: (storeType?: string) => Promise<void>;
+  saveStore: (store: Partial<Store>) => Promise<void>;
+  deleteStore: (storeId: string) => Promise<string | null>;
+  updateUserPin: (userId: string, pin: string) => Promise<string | null>;
 
   // Modals
   setLastCompletedOrder: (order: Order | null) => void;
@@ -191,6 +194,8 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         db.settings.toCollection().first(),
       ]);
 
+    // Keep stores in creation order (store-1, store-2, …, then store-<timestamp>)
+    allStores.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
     setStores(allStores);
     setUsers(allUsers);
     setCategories(allCats.sort((a, b) => a.order - b.order));
@@ -1035,6 +1040,86 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await refreshData();
   };
 
+  // Stores (administrator)
+  const saveStore = async (storeData: Partial<Store>) => {
+    const existing = stores.find((st) => st.id === storeData.id);
+    const id = existing?.id || `store-${Date.now()}`;
+    await db.stores.put({
+      currency: settings.currency,
+      type: 'GENERAL',
+      defaultTaxRate: 20,
+      ...existing,
+      ...storeData,
+      id,
+      name: storeData.name?.trim() || existing?.name || 'Новый магазин',
+      code: storeData.code?.trim() || existing?.code || `ST-${String(stores.length + 1).padStart(2, '0')}`,
+      address: storeData.address?.trim() ?? existing?.address ?? '',
+      phone: storeData.phone?.trim() ?? existing?.phone ?? '',
+      taxNumber: storeData.taxNumber?.trim() ?? existing?.taxNumber ?? '',
+    });
+    await db.auditLogs.add({
+      id: `audit-${Date.now()}`,
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      action: existing ? 'STORE_UPDATE' : 'STORE_CREATE',
+      entity: 'Store',
+      entityId: id,
+      details: `${existing ? 'Изменён' : 'Добавлен'} магазин ${storeData.name || existing?.name || ''}`,
+      timestamp: Date.now(),
+    });
+    await refreshData();
+  };
+
+  // Returns an error message when the store cannot be deleted
+  const deleteStore = async (storeId: string) => {
+    const store = stores.find((st) => st.id === storeId);
+    if (!store) return 'Магазин не найден';
+    if (stores.length <= 1) return 'Нельзя удалить единственный магазин';
+    const openShift = await db.shifts.filter((sh) => sh.storeId === storeId && sh.status === 'OPEN').first();
+    if (openShift) return `В магазине «${store.name}» открыта смена. Сначала закройте её.`;
+
+    await db.inventory.where({ storeId }).delete();
+    await db.stores.delete(storeId);
+    await db.auditLogs.add({
+      id: `audit-${Date.now()}`,
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      action: 'STORE_DELETE',
+      entity: 'Store',
+      entityId: storeId,
+      details: `Удалён магазин ${store.name}`,
+      timestamp: Date.now(),
+    });
+    if (currentStore?.id === storeId) {
+      const next = stores.find((st) => st.id !== storeId)!;
+      await db.settings.put({ ...settings, storeId: next.id });
+      setCurrentShift(null);
+    }
+    await refreshData();
+    return null;
+  };
+
+  // Returns an error message when the PIN is not valid
+  const updateUserPin = async (userId: string, pin: string) => {
+    const user = users.find((u) => u.id === userId);
+    if (!user) return 'Пользователь не найден';
+    if (!/^\d{4,8}$/.test(pin)) return 'ПИН-код должен состоять из 4–8 цифр';
+    if (users.some((u) => u.id !== userId && u.pinCode === pin)) return 'Такой ПИН-код уже есть у другого пользователя';
+    await db.users.update(userId, { pinCode: pin });
+    await db.auditLogs.add({
+      id: `audit-${Date.now()}`,
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      action: 'USER_PIN_CHANGE',
+      entity: 'User',
+      entityId: userId,
+      details: `Изменён ПИН-код пользователя ${user.name}`,
+      timestamp: Date.now(),
+    });
+    await refreshData();
+    return null;
+  };
+
   const resetDatabase = async () => {
     await initDatabase(true);
     await refreshData();
@@ -1100,6 +1185,9 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         saveStockMovement,
         refreshData,
         resetDatabase,
+        saveStore,
+        deleteStore,
+        updateUserPin,
         setLastCompletedOrder,
         setIsReceiptModalOpen,
         cartTotals,
