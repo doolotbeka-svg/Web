@@ -107,6 +107,8 @@ interface POSContextType {
   updateUserPin: (userId: string, pin: string) => Promise<string | null>;
   addCashier: (name: string, pin: string, storeId?: string) => Promise<string | null>;
   deleteCashier: (userId: string) => Promise<string | null>;
+  updateCashierStore: (userId: string, storeId?: string) => Promise<void>;
+  isStoreLocked: boolean;
 
   // Modals
   setLastCompletedOrder: (order: Order | null) => void;
@@ -247,8 +249,18 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [settings.theme]);
 
+  // A cashier assigned to an existing store may only work in that store
+  const lockedStoreId = (user: User | null) =>
+    user?.role === 'CASHIER' && user.storeId && stores.some((st) => st.id === user.storeId) ? user.storeId : null;
+
   // Switch store
   const switchStore = async (storeId: string) => {
+    const locked = lockedStoreId(currentUser);
+    if (locked && locked !== storeId) return;
+    await applyStore(storeId);
+  };
+
+  const applyStore = async (storeId: string) => {
     const store = stores.find((s) => s.id === storeId);
     if (!store) return;
     setCurrentStore(store);
@@ -272,6 +284,9 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       sound.playErrorBuzzer();
       return false;
     }
+    // Open the cashier's own store
+    const locked = lockedStoreId(user);
+    if (locked && currentStore?.id !== locked) await applyStore(locked);
     setCurrentUser(user);
     sound.playKeypadClick();
     return true;
@@ -1079,6 +1094,9 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (stores.length <= 1) return 'Нельзя удалить единственный магазин';
     const openShift = await db.shifts.filter((sh) => sh.storeId === storeId && sh.status === 'OPEN').first();
     if (openShift) return `В магазине «${store.name}» открыта смена. Сначала закройте её.`;
+    const bound = users.filter((u) => u.role === 'CASHIER' && u.storeId === storeId);
+    if (bound.length > 0)
+      return `К магазину «${store.name}» привязаны кассиры: ${bound.map((u) => u.name).join(', ')}. Сначала переназначьте или удалите их.`;
 
     await db.inventory.where({ storeId }).delete();
     await db.stores.delete(storeId);
@@ -1149,6 +1167,24 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     await refreshData();
     return null;
+  };
+
+  const updateCashierStore = async (userId: string, storeId?: string) => {
+    const user = users.find((u) => u.id === userId);
+    if (!user || user.role !== 'CASHIER') return;
+    await db.users.update(userId, { storeId: storeId || undefined });
+    const storeName = stores.find((st) => st.id === storeId)?.name || 'все магазины';
+    await db.auditLogs.add({
+      id: `audit-${Date.now()}`,
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      action: 'USER_STORE_CHANGE',
+      entity: 'User',
+      entityId: userId,
+      details: `Кассир ${user.name} привязан: ${storeName}`,
+      timestamp: Date.now(),
+    });
+    await refreshData();
   };
 
   const deleteCashier = async (userId: string) => {
@@ -1243,6 +1279,8 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateUserPin,
         addCashier,
         deleteCashier,
+        updateCashierStore,
+        isStoreLocked: !!lockedStoreId(currentUser),
         setLastCompletedOrder,
         setIsReceiptModalOpen,
         cartTotals,
